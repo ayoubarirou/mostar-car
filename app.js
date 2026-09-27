@@ -1,0 +1,40 @@
+'use strict';
+const config=window.MOSTAR;
+const $=(selector,root=document)=>root.querySelector(selector);
+const all=(selector)=>document.querySelectorAll(selector);
+const safe=(value)=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const validUrl=(value)=>{try{const u=new URL(value);return ['https:','http:'].includes(u.protocol)?u.href:'';}catch{return '';}};
+document.title=`${config.company} — ${config.subtitle}`;
+const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let textNode;while((textNode=walker.nextNode())){textNode.textContent=textNode.textContent.replaceAll('Mostar Car',config.displayName||config.company).replaceAll('MOSTAR CAR',config.company);}
+all('.brand-mark').forEach(mark=>{if(config.logoImage){const logo=document.createElement('img');logo.src=config.logoImage;logo.alt=config.company;logo.style.cssText='width:44px;height:44px;object-fit:contain';mark.replaceWith(logo);}else{mark.firstChild.textContent=config.logoText||'M';}});
+all('[data-company]').forEach(el=>el.textContent=config.company);
+all('[data-subtitle]').forEach(el=>el.textContent=config.subtitle);
+all('[data-address]').forEach(el=>el.textContent=config.address);
+all('[data-hours]').forEach(el=>el.textContent=config.hours);
+all('[data-phone-label]').forEach(el=>el.textContent=config.phoneLabel);
+$('#year').textContent=new Date().getFullYear();
+$('#hero-image').src=config.heroImage;$('#about-image').src=config.aboutImage;
+const dialog=$('#demo-dialog');
+function showMessage(message,description){$('#message-preview').value=message;$('#dialog-description').textContent=description||'Le numéro WhatsApp de l’agence reste à renseigner. Voici le message préparé.';$('#copy-status').textContent='';dialog.showModal();}
+const whatsappNumber=config.whatsapp.replace(/\D/g,'');
+function whatsappUrl(message){return `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;}
+all('[data-whatsapp]').forEach(link=>{if(whatsappNumber){link.href=whatsappUrl(config.whatsappMessage);link.target='_blank';link.rel='noopener noreferrer';}else{link.addEventListener('click',e=>{e.preventDefault();showMessage(config.whatsappMessage);});}});
+function contactLink(el,value,label,kind){el.textContent=label;if(value){el.href=kind==='phone'?`tel:${value.replace(/[^+\d]/g,'')}`:validUrl(value);if(kind!=='phone'){el.target='_blank';el.rel='noopener noreferrer';}}else{el.href='#contact';el.addEventListener('click',e=>{e.preventDefault();showMessage(config.whatsappMessage,'Ces coordonnées seront ajoutées par l’agence. Vous pouvez déjà copier votre demande.');});}}
+contactLink($('#phone-link'),config.phone,config.phoneLabel,'phone');contactLink($('#instagram-link'),config.instagram,config.instagramLabel);contactLink($('#footer-instagram'),config.instagram,'Instagram ↗');
+if(validUrl(config.mapsUrl)){$('#maps-link').href=validUrl(config.mapsUrl);$('#maps-link').target='_blank';$('#maps-link').rel='noopener noreferrer';$('.map-area small').textContent='Consulter l’itinéraire vers notre agence';}else{$('#maps-link').addEventListener('click',e=>{e.preventDefault();showMessage(config.whatsappMessage,'L’adresse exacte de l’agence sera ajoutée pour afficher son emplacement sur Google Maps.');});}
+$('#fleet-grid').innerHTML=config.vehicles.map((v,i)=>`<article class="vehicle"><div class="vehicle-photo"><img src="${safe(v.image)}" alt="${safe(v.name)} — photo d’illustration" loading="lazy" width="640" height="420"><span class="vehicle-type">${v.id==='duster'?'SUV':v.id==='logan'?'BERLINE':'COMPACTE'} / 0${i+1}</span></div><div class="vehicle-body"><div class="vehicle-top"><h3>${safe(v.name)}</h3><div class="vehicle-price"><strong>${v.price}</strong> <small>MAD / j</small></div></div><p class="vehicle-tagline">${safe(v.category)}</p><div class="specs"><span><i>⚙</i>${safe(v.transmission)}</span><span><i>◇</i>${safe(v.fuel)}</span><span><i>♧</i>${v.seats} places</span><span><i>❄</i>Climatisation</span></div><button class="reserve" data-vehicle="${safe(v.id)}" aria-label="Réserver ${safe(v.name)}">Réserver <span>↗</span></button></div></article>`).join('');
+$('#review-grid').innerHTML=config.reviews.map(r=>`<article class="review"><div class="stars" aria-label="5 étoiles sur 5">★★★★★</div><blockquote>« ${safe(r.text)} »</blockquote><div class="review-person"><span class="avatar" aria-hidden="true">${safe(r.name.slice(0,1))}</span><strong>${safe(r.name)}</strong></div></article>`).join('');
+const form=$('#booking-form'),start=form.elements.start,end=form.elements.end,vehicle=form.elements.vehicle;
+config.vehicles.forEach(v=>vehicle.add(new Option(v.name,v.id)));
+const dateString=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+start.min=dateString(new Date());end.min=start.min;
+function getDays(){return Math.ceil((new Date(end.value+'T12:00:00Z')-new Date(start.value+'T12:00:00Z'))/86400000);}
+function updateEstimate(){end.min=start.value||start.min;end.setCustomValidity(end.value&&start.value&&getDays()<1?'La date de retour doit être après la date de départ.':'');const selected=config.vehicles.find(v=>v.id===vehicle.value),days=getDays();$('#estimate').textContent=selected&&days>0?`${days} jour${days>1?'s':''} · Estimation : ${(days*selected.price).toLocaleString('fr-FR')} MAD — à confirmer`:'Sélectionnez vos dates et votre véhicule pour estimer votre location.';}
+[start,end,vehicle].forEach(el=>el.addEventListener('change',updateEstimate));
+all('[data-vehicle]').forEach(button=>button.addEventListener('click',()=>{vehicle.value=button.dataset.vehicle;updateEstimate();$('#reservation').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});start.focus({preventScroll:true});}));
+form.addEventListener('submit',e=>{e.preventDefault();updateEstimate();if(!form.reportValidity())return;const selected=config.vehicles.find(v=>v.id===vehicle.value);const formatDate=value=>value.split('-').reverse().join('/');const message=`${config.whatsappMessage}\n\nVéhicule : ${selected.name}\nDate de départ : ${formatDate(start.value)}\nDate de retour : ${formatDate(end.value)}\nNom : ${form.elements.name.value.trim()}\nTéléphone : ${form.elements.phone.value.trim()}\nEstimation : ${getDays()*selected.price} MAD (${getDays()} jours), sous réserve de confirmation.`;if(whatsappNumber){window.open(whatsappUrl(message),'_blank','noopener,noreferrer');showMessage(message,'Votre demande est prête dans WhatsApp. Envoyez le message pour contacter l’agence ; la réservation reste à confirmer.');}else showMessage(message);});
+$('.close-dialog').addEventListener('click',()=>dialog.close());dialog.addEventListener('click',e=>{if(e.target===dialog){const rect=dialog.getBoundingClientRect();if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom)dialog.close();}});
+$('#copy-message').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('#message-preview').value);$('#copy-status').textContent='Message copié.';}catch{$('#message-preview').select();$('#copy-status').textContent='Sélectionnez puis copiez le message.';}});
+const menu=$('.menu-button');function closeMenu(){$('#navigation').classList.remove('open');menu.setAttribute('aria-expanded','false');menu.setAttribute('aria-label','Ouvrir le menu');}
+menu.addEventListener('click',()=>{const open=$('#navigation').classList.toggle('open');menu.setAttribute('aria-expanded',String(open));menu.setAttribute('aria-label',open?'Fermer le menu':'Ouvrir le menu');});all('#navigation a').forEach(link=>link.addEventListener('click',closeMenu));document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu();});
+if('IntersectionObserver'in window&&!matchMedia('(prefers-reduced-motion: reduce)').matches){const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('reveal');observer.unobserve(entry.target);}}),{threshold:.12});all('.vehicle,.benefits article,.review,.about-copy').forEach(el=>observer.observe(el));}
